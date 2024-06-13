@@ -8,5 +8,5 @@ functions/server-render
 functions/render
 
 
-# Local Netlify folder
 .netlify
+.vercel
