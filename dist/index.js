@@ -89,8 +89,10 @@ function createServerlessFunction(funcName, functionsDir, renderFunctionFilePath
           format: "esm",
           stdin: {
             contents: server_default,
-            resolveDir: process.cwd()
+            resolveDir: process.cwd(),
+            sourcefile: "server.ts"
           },
+          legalComments: "none",
           bundle: true,
           treeShaking: true,
           outfile: path.join(funcDir, "index.mjs"),
@@ -102,6 +104,7 @@ function createServerlessFunction(funcName, functionsDir, renderFunctionFilePath
     } catch (e) {
       console.warn("If error is a resolution error and you're running with pnpm install your dependencies with `pnpm install --shamefully-hoist`");
       console.error(e);
+      throw e;
     }
   });
 }

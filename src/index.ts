@@ -100,8 +100,10 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
         format: "esm",
         stdin: {
           contents: serverSrc,
-          resolveDir: cwd()
+          resolveDir: cwd(),
+          sourcefile: "server.ts"
         },
+        legalComments: "none",
         bundle: true,
         treeShaking: true,
         outfile: join(funcDir, 'index.mjs'),
@@ -114,6 +116,6 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
   catch (e) {
     console.warn("If error is a resolution error and you're running with pnpm install your dependencies with `pnpm install --shamefully-hoist`");
     console.error(e)
-
+    throw e;
   }
 }
