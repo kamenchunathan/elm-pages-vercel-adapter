@@ -1,9 +1,10 @@
-module Route.Journal.SPLAT__ exposing (ActionData, Data, Model, Msg, RouteParams, route)
+module Route.Journal.SPLAT__ exposing (Model, Msg, RouteParams, route, Data, ActionData)
 
-{-| 
+{-|
+
 @docs Model, Msg, RouteParams, route, Data, ActionData
--}
 
+-}
 
 import BackendTask
 import Effect
@@ -35,12 +36,13 @@ route =
         { data = data
         , pages = pages
         , head = head
-        } |> RouteBuilder.buildWithLocalState
-                     { view = view
-                     , init = init
-                     , update = update
-                     , subscriptions = subscriptions
-                     }
+        }
+        |> RouteBuilder.buildWithLocalState
+            { view = view
+            , init = init
+            , update = update
+            , subscriptions = subscriptions
+            }
 
 
 init :
@@ -63,8 +65,7 @@ update app shared msg model =
             ( model, Effect.none )
 
 
-subscriptions :
-    RouteParams -> UrlPath.UrlPath -> Shared.Model -> Model -> Sub Msg
+subscriptions : RouteParams -> UrlPath.UrlPath -> Shared.Model -> Model -> Sub Msg
 subscriptions routeParams path shared model =
     Sub.none
 
@@ -100,4 +101,8 @@ view app shared model =
 
 pages : BackendTask.BackendTask FatalError.FatalError (List RouteParams)
 pages =
-    BackendTask.succeed []
+    BackendTask.succeed
+        [ { splat = [] }
+        , { splat = [ "2021", "june", "Tue, 11" ] }
+        , { splat = [ "2021", "june", "Wed, 12" ] }
+        ]
