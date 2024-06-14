@@ -1,5 +1,5 @@
 import { copyFile, cp, mkdir } from "fs/promises";
-import { emptyDir } from "fs-extra";
+import { emptyDir, writeJson } from "fs-extra";
 import { join } from "path";
 import { glob } from "glob";
 import { build } from "esbuild";
@@ -54,6 +54,8 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
   await createServerlessFunction("ssr_", functionsDir, renderFunctionFilePath);
   await createServerlessFunction("isr_", functionsDir, renderFunctionFilePath);
 
+  // Create Config
+  writeConfig(routePatterns);
 }
 
 
@@ -89,11 +91,10 @@ function pathPatternToGlob(pathPattern: string) {
 async function createServerlessFunction(funcName: string, functionsDir: string, renderFunctionFilePath: string) {
   const funcDir = join(functionsDir, funcName) + ".func";
   await mkdir(funcDir);
-  console.log(cwd())
   console.log(funcDir)
 
   try {
-    let buildResult = await build(
+    await build(
       {
         platform: 'node',
         target: 'node16',
@@ -118,4 +119,92 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
     console.error(e)
     throw e;
   }
+
+  // Function config
+  writeJson(
+    join(funcDir, ".vc-config.json"),
+    {
+      runtime: "nodejs20.x",
+      handler: "index.mjs",
+      launcherType: "Nodejs",
+      shouldAddHelpers: true
+    }
+  )
+}
+
+
+function writeConfig(routePatterns: RoutePattern[]) {
+  const serverlessRoutes = routePatterns
+    .filter(
+      (route) =>
+        route.kind === "prerender-with-fallback" ||
+        route.kind === "serverless"
+    )
+    .map((route) => {
+      const dest =
+        route.kind === "prerender-with-fallback" ? "/isr" : "/serverless";
+
+      if (route.kind === "prerender-with-fallback") {
+        const source = `/${route.pathPattern
+          .substring(1)
+          .split("/")
+          .map((path) => {
+            if (path.includes(":")) {
+              return `(?<${path.replace(":", "")}>[^/]*)`;
+            } else {
+              return `(?<${path}>${path})`;
+            }
+          })
+          .join("/")}`;
+        return [
+          { src: source, dest, check: true },
+          {
+            src: `${source}/(?<content>content.dat)`,
+            dest: dest,
+            check: true,
+          },
+        ];
+      } else {
+        const source = `/${route.pathPattern
+          .substring(1)
+          .split("/")
+          .map((path) => {
+            if (path.includes(":")) {
+              return `([^/]*)`;
+            } else {
+              return path;
+            }
+          })
+          .join("/")}`;
+        return [
+          { src: source, dest, check: true },
+          {
+            src: `${source}/content.dat`,
+            dest,
+            check: true,
+          },
+        ];
+      }
+    })
+    .flat();
+
+  console.log("Serverless routes: ", serverlessRoutes)
+
+  writeJson(join(VERCEL_OUTPUT_DIR, "config.json"), {
+    version: 3,
+    routes: [
+      {
+        src: "^/(?:(.+)/)?index(?:\\.html)?/?$",
+        headers: { Location: "/$1" },
+        status: 308,
+      },
+      {
+        src: "^/(.*)\\.html/?$",
+        headers: { Location: "/$1" },
+        status: 308,
+      },
+      { handle: "filesystem" },
+      ...serverlessRoutes,
+    ],
+  });
 }

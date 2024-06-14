@@ -49,6 +49,7 @@ function run(_0) {
     }
     yield createServerlessFunction("ssr_", functionsDir, renderFunctionFilePath);
     yield createServerlessFunction("isr_", functionsDir, renderFunctionFilePath);
+    writeConfig(routePatterns);
   });
 }
 function handlePrerenderedRoute(pathPattern, elmDistDir, staticFilesDir) {
@@ -79,10 +80,9 @@ function createServerlessFunction(funcName, functionsDir, renderFunctionFilePath
   return __async(this, null, function* () {
     const funcDir = path.join(functionsDir, funcName) + ".func";
     yield promises.mkdir(funcDir);
-    console.log(process.cwd());
     console.log(funcDir);
     try {
-      let buildResult = yield esbuild.build(
+      yield esbuild.build(
         {
           platform: "node",
           target: "node16",
@@ -106,6 +106,73 @@ function createServerlessFunction(funcName, functionsDir, renderFunctionFilePath
       console.error(e);
       throw e;
     }
+    fsExtra.writeJson(
+      path.join(funcDir, ".vc-config.json"),
+      {
+        runtime: "nodejs20.x",
+        handler: "index.mjs",
+        launcherType: "Nodejs",
+        shouldAddHelpers: true
+      }
+    );
+  });
+}
+function writeConfig(routePatterns) {
+  const serverlessRoutes = routePatterns.filter(
+    (route) => route.kind === "prerender-with-fallback" || route.kind === "serverless"
+  ).map((route) => {
+    const dest = route.kind === "prerender-with-fallback" ? "/isr" : "/serverless";
+    if (route.kind === "prerender-with-fallback") {
+      const source = `/${route.pathPattern.substring(1).split("/").map((path) => {
+        if (path.includes(":")) {
+          return `(?<${path.replace(":", "")}>[^/]*)`;
+        } else {
+          return `(?<${path}>${path})`;
+        }
+      }).join("/")}`;
+      return [
+        { src: source, dest, check: true },
+        {
+          src: `${source}/(?<content>content.dat)`,
+          dest,
+          check: true
+        }
+      ];
+    } else {
+      const source = `/${route.pathPattern.substring(1).split("/").map((path) => {
+        if (path.includes(":")) {
+          return `([^/]*)`;
+        } else {
+          return path;
+        }
+      }).join("/")}`;
+      return [
+        { src: source, dest, check: true },
+        {
+          src: `${source}/content.dat`,
+          dest,
+          check: true
+        }
+      ];
+    }
+  }).flat();
+  console.log("Serverless routes: ", serverlessRoutes);
+  fsExtra.writeJson(path.join(VERCEL_OUTPUT_DIR, "config.json"), {
+    version: 3,
+    routes: [
+      {
+        src: "^/(?:(.+)/)?index(?:\\.html)?/?$",
+        headers: { Location: "/$1" },
+        status: 308
+      },
+      {
+        src: "^/(.*)\\.html/?$",
+        headers: { Location: "/$1" },
+        status: 308
+      },
+      { handle: "filesystem" },
+      ...serverlessRoutes
+    ]
   });
 }
 

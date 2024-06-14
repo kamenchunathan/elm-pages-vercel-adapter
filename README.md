@@ -26,7 +26,7 @@ export default {
 };
 ```
 ## Known Issues
-When running with `pnpm` Install dependencies with `pnpm --shamefully-hoist` to make all dependencies available to the esbuid program. 
+When running with `pnpm` Install dependencies with `pnpm install --shamefully-hoist` to make all dependencies available to the esbuid program. 
 If you get resolution issues check that this may be the issue
 
 ## Contributing
