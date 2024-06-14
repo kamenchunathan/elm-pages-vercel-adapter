@@ -1,4 +1,12 @@
-export default function run({ routePatterns }: {
-    routePatterns: any;
-}): Promise<void>;
-export declare function pathPatternToGlob(pathPattern: any): any;
+type AdapterOtpions = {
+    renderFunctionFilePath: string;
+    routePatterns: RoutePattern[];
+    apiRoutePatterns: any[];
+};
+type RoutePattern = {
+    kind: "static" | "prerender" | "serverless" | "prerender-with-fallback";
+    pathPattern: string;
+};
+declare function run({ routePatterns, renderFunctionFilePath }: AdapterOtpions): Promise<void>;
+
+export { run as default };

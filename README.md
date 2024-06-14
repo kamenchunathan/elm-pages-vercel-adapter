@@ -14,28 +14,20 @@ A vercel adapter for the elm pages
 
 
 ## Usage
-In your elm-pages config provide adapter.default as the adapter because of the way js works
-
-```
+In your elm pages config
+```js
 // elm-pages.config.mjs
 import { defineConfig } from "vite";
 import adapter from "vercel-adapter";
 
-
 export default {
   vite: defineConfig({}),
-  adapter: adapter.default,
-  headTagsTemplate(context) {
-    return `
-<link rel="stylesheet" href="/style.css" />
-<meta name="generator" content="elm-pages v${context.cliVersion}" />
-`;
-  },
-  preloadTagForFile(file) {
-    // add preload directives for JS assets and font assets, etc., skip for CSS files
-    // this function will be called with each file that is procesed by Vite, including any files in your headTagsTemplate in your config
-    return !file.endsWith(".css");
-  },
+  adapter
 };
 ```
+## Known Issues
+When running with `pnpm` Install dependencies with `pnpm --shamefully-hoist` to make all dependencies available to the esbuid program. 
+If you get resolution issues check that this may be the issue
+
 ## Contributing
+

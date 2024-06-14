@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import adapter from "vercel-adapter/index.js";
+import adapter from "vercel-adapter";
 
 export default {
   vite: defineConfig({}),

@@ -5,18 +5,19 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "mocha"
+    "build": "tsup src/index.ts --dts"
   },
   "keywords": [],
   "author": "Nathan Kamenchu",
   "dependencies": {
+    "esbuild": "^0.20.2",
     "fs-extra": "^11.2.0",
     "glob": "^10.3.15"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^20.14.2",
-    "mocha": "^10.4.0",
+    "esbuild-plugin-raw": "^0.1.8",
     "tsup": "^8.1.0",
     "typescript": "^5.4.5"
   }

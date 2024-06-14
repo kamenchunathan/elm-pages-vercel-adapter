@@ -2,6 +2,11 @@ import { copyFile, cp, mkdir } from "fs/promises";
 import { emptyDir } from "fs-extra";
 import { join } from "path";
 import { glob } from "glob";
+import { build } from "esbuild";
+import { cwd } from "process";
+
+// @ts-ignore
+import serverSrc from "./server.ts?raw"
 
 
 // NOTE: These are configurable
@@ -10,15 +15,21 @@ import { glob } from "glob";
 const VERCEL_OUTPUT_DIR = join(".vercel", "output");
 const ELM_DIST_DIR = "dist";
 
+type AdapterOtpions = {
+  renderFunctionFilePath: string,
+  routePatterns: RoutePattern[],
+  // TODO: Add actual type later when I get to testing this
+  apiRoutePatterns: any[]
+}
 
-export default async function run(
-  { routePatterns }: {
-    routePatterns: {
-      kind: "static" | "prerender" | "serverless",
-      pathPattern: string
-    }[],
-  }
-) {
+
+type RoutePattern = {
+  kind: "static" | "prerender" | "serverless" | "prerender-with-fallback",
+  pathPattern: string
+}
+
+
+export default async function run({ routePatterns, renderFunctionFilePath }: AdapterOtpions) {
   const staticFilesDir = join(VERCEL_OUTPUT_DIR, "static");
   const functionsDir = join(VERCEL_OUTPUT_DIR, "functions");
 
@@ -40,8 +51,8 @@ export default async function run(
   }
 
   // Serverless Routes
-  await createServerlessFunction("ssr_", functionsDir);
-  await createServerlessFunction("isr_", functionsDir);
+  await createServerlessFunction("ssr_", functionsDir, renderFunctionFilePath);
+  await createServerlessFunction("isr_", functionsDir, renderFunctionFilePath);
 
 }
 
@@ -75,7 +86,34 @@ function pathPatternToGlob(pathPattern: string) {
     }).join("/");
 }
 
-async function createServerlessFunction(funcName: string, functionsDir: string) {
+async function createServerlessFunction(funcName: string, functionsDir: string, renderFunctionFilePath: string) {
   const funcDir = join(functionsDir, funcName) + ".func";
   await mkdir(funcDir);
+  console.log(cwd())
+  console.log(funcDir)
+
+  try {
+    let buildResult = await build(
+      {
+        platform: 'node',
+        target: 'node16',
+        format: "esm",
+        stdin: {
+          contents: serverSrc,
+          resolveDir: cwd()
+        },
+        bundle: true,
+        treeShaking: true,
+        outfile: join(funcDir, 'index.mjs'),
+        alias: {
+          'render': renderFunctionFilePath
+        },
+      }
+    );
+  }
+  catch (e) {
+    console.warn("If error is a resolution error and you're running with pnpm install your dependencies with `pnpm install --shamefully-hoist`");
+    console.error(e)
+
+  }
 }
