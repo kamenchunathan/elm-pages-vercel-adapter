@@ -41,6 +41,7 @@ function run(_0) {
     yield fsExtra.emptyDir(VERCEL_OUTPUT_DIR);
     yield promises.mkdir(staticFilesDir);
     yield promises.mkdir(functionsDir);
+    writeConfig(routePatterns);
     yield promises.cp(path.join(ELM_DIST_DIR, "assets"), path.join(staticFilesDir, "assets"), { recursive: true });
     for (const routePattern of routePatterns) {
       if (routePattern.kind === "static" || routePattern.kind === "prerender") {
@@ -49,7 +50,6 @@ function run(_0) {
     }
     yield createServerlessFunction("ssr_", functionsDir, renderFunctionFilePath);
     yield createServerlessFunction("isr_", functionsDir, renderFunctionFilePath);
-    writeConfig(routePatterns);
   });
 }
 function handlePrerenderedRoute(pathPattern, elmDistDir, staticFilesDir) {

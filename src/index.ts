@@ -37,6 +37,9 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
   await mkdir(staticFilesDir);
   await mkdir(functionsDir);
 
+  // Create Config
+  writeConfig(routePatterns);
+
   // Copy static assets
   // These are not dependent on route and are contained in the assets directory plus an elm.js
   // and elm-[some hash].js 
@@ -54,9 +57,7 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
   await createServerlessFunction("ssr_", functionsDir, renderFunctionFilePath);
   await createServerlessFunction("isr_", functionsDir, renderFunctionFilePath);
 
-  // Create Config
-  writeConfig(routePatterns);
-}
+  }
 
 
 async function handlePrerenderedRoute(pathPattern: string, elmDistDir: string, staticFilesDir: string) {
