@@ -15,8 +15,6 @@
     "lamdera": "^0.19.1-1.2.1-1",
     "vercel-adapter": "file:../..",
     "vite": "^5.2.10"
-  },
-  "dependencies": {
-    "@netlify/functions": "^2.6.0"
   }
 }
+

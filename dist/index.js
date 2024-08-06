@@ -43,6 +43,10 @@ function run(_0) {
     yield promises.mkdir(functionsDir);
     writeConfig(routePatterns);
     yield promises.cp(path.join(ELM_DIST_DIR, "assets"), path.join(staticFilesDir, "assets"), { recursive: true });
+    const matches = yield glob.glob(path.join(ELM_DIST_DIR, "*.js"));
+    for (const match of matches) {
+      yield promises.cp(match, path.join(staticFilesDir, path.basename(match)));
+    }
     for (const routePattern of routePatterns) {
       if (routePattern.kind === "static" || routePattern.kind === "prerender") {
         yield handlePrerenderedRoute(routePattern.pathPattern, ELM_DIST_DIR, staticFilesDir);

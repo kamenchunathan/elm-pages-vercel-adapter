@@ -1,6 +1,6 @@
 import { copyFile, cp, mkdir } from "fs/promises";
 import { emptyDir, writeJson } from "fs-extra";
-import { join } from "path";
+import { basename, join } from "path";
 import { glob } from "glob";
 import { build } from "esbuild";
 import { cwd } from "process";
@@ -45,6 +45,11 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
   // and elm-[some hash].js 
   // TODO: Copy the elm scripts to the static files directory
   await cp(join(ELM_DIST_DIR, "assets"), join(staticFilesDir, "assets"), { recursive: true });
+  const matches = await glob(join(ELM_DIST_DIR, "*.js"));
+  for (const match of matches) {
+    await cp(match, join(staticFilesDir, basename(match)));
+  }
+
 
   // Prerendered and Static Routes
   for (const routePattern of routePatterns) {
@@ -57,7 +62,7 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
   await createServerlessFunction("ssr_", functionsDir, renderFunctionFilePath);
   await createServerlessFunction("isr_", functionsDir, renderFunctionFilePath);
 
-  }
+}
 
 
 async function handlePrerenderedRoute(pathPattern: string, elmDistDir: string, staticFilesDir: string) {
