@@ -1,5 +1,5 @@
-import { copyFile, cp, mkdir } from "fs/promises";
-import { emptyDir } from "fs-extra";
+import { copyFile, cp, mkdir, writeFile } from "fs/promises";
+import { emptyDir, writeJson } from "fs-extra";
 import { join } from "path";
 import { glob } from "glob";
 import { build } from "esbuild";
@@ -7,6 +7,7 @@ import { cwd } from "process";
 
 // @ts-ignore
 import serverSrc from "./server.ts?raw"
+import path = require("path");
 
 
 // NOTE: These are configurable
@@ -36,6 +37,8 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
   await emptyDir(VERCEL_OUTPUT_DIR);
   await mkdir(staticFilesDir);
   await mkdir(functionsDir);
+
+  await writeConfigJson(routePatterns);
 
   // Copy static assets
   // These are not dependent on route and are contained in the assets directory plus an elm.js
@@ -92,6 +95,14 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
   console.log(cwd())
   console.log(funcDir)
 
+
+  // Function config
+  writeJson(path.join(funcDir, '.vc-config.json'), {
+    runtime: 'nodejs20.x',
+    handler: 'index.mjs'
+  });
+
+
   try {
     let buildResult = await build(
       {
@@ -118,4 +129,11 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
     console.error(e)
     throw e;
   }
+}
+
+async function writeConfigJson(routes: RoutePattern[]) {
+  await writeJson(path.join(VERCEL_OUTPUT_DIR, 'config.json'), {
+    version: 3,
+    routes: routes.map((route) => { }),
+  });
 }
