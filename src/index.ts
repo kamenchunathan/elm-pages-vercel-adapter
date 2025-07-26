@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir, writeFile } from "fs/promises";
+import { copyFile, cp, mkdir } from "fs/promises";
 import { emptyDir, writeJson } from "fs-extra";
 import { join } from "path";
 import { glob } from "glob";
@@ -40,15 +40,11 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
 
   await writeConfigJson(routePatterns);
 
-  // Copy static assets
-  // These are not dependent on route and are contained in the assets directory plus an elm.js
-  // and elm-[some hash].js 
-  // TODO: Copy the elm scripts to the static files directory
-  await cp(join(ELM_DIST_DIR, "assets"), join(staticFilesDir, "assets"), { recursive: true });
+  await cp(ELM_DIST_DIR, join(staticFilesDir), { recursive: true });
 
   // Prerendered and Static Routes
   for (const routePattern of routePatterns) {
-    if (routePattern.kind === "static" || routePattern.kind === "prerender") {
+    if (routePattern.kind === "static" || routePattern.kind === "prerender" || routePattern.kind == "prerender-with-fallback") {
       await handlePrerenderedRoute(routePattern.pathPattern, ELM_DIST_DIR, staticFilesDir);
     }
   }
@@ -60,17 +56,17 @@ export default async function run({ routePatterns, renderFunctionFilePath }: Ada
 }
 
 
+
+
 async function handlePrerenderedRoute(pathPattern: string, elmDistDir: string, staticFilesDir: string) {
   console.log('Handle route: ' + pathPattern);
-  const prerenderedRoutesGlob = join(elmDistDir + pathPatternToGlob(pathPattern), 'index.html');
+  const prerenderedRoutesGlob = join(elmDistDir + pathPatternToGlob(pathPattern), '{index.html,content.dat}');
   const htmlFiles = await glob(prerenderedRoutesGlob, {});
 
   for (const file of htmlFiles) {
-    // NOTE: Magic number 10 is the length of the string '/index.html'
-    const folder = file.substring(elmDistDir.length, file.length - 10);
-    const dstDir = join(staticFilesDir, folder);
+    const dstDir = join(staticFilesDir, path.dirname(file).substring(elmDistDir.length));
     await mkdir(dstDir, { recursive: true });
-    await copyFile(file, join(dstDir, 'index.html'));
+    await copyFile(file, join(dstDir, path.basename(file)));
   }
 }
 
@@ -99,16 +95,17 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
   // Function config
   writeJson(path.join(funcDir, '.vc-config.json'), {
     runtime: 'nodejs20.x',
-    handler: 'index.mjs'
+    handler: 'index.js'
   });
 
 
   try {
+
     let buildResult = await build(
       {
         platform: 'node',
-        target: 'node16',
-        format: "esm",
+        target: 'node20',
+        format: "cjs",
         stdin: {
           contents: serverSrc,
           resolveDir: cwd(),
@@ -117,7 +114,8 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
         legalComments: "none",
         bundle: true,
         treeShaking: true,
-        outfile: join(funcDir, 'index.mjs'),
+        outfile: join(funcDir, 'index.js'),
+        external: [...require('module').builtinModules],
         alias: {
           'render': renderFunctionFilePath
         },
@@ -131,9 +129,61 @@ async function createServerlessFunction(funcName: string, functionsDir: string, 
   }
 }
 
+function generateServerlessRoutes(routePatterns: RoutePattern[]) {
+  // Filter routes that need server-side handling
+  const serverRoutes = routePatterns.filter(route =>
+    route.kind === "prerender-with-fallback" ||
+    route.kind === "serverless"
+  );
+
+  const allRoutes = [];
+
+  for (const route of serverRoutes) {
+    const isISR = route.kind === "prerender-with-fallback";
+    const destination = isISR ? "/isr_" : "/ssr_";
+
+    const segments = route.pathPattern.substring(1).split("/");
+    const regexSegments = segments.map(segment => {
+      if (segment.includes(":")) {
+        // Dynamic segment: :id becomes (?<id>[^/]*) for ISR or ([^/]*) for serverless
+        const paramName = segment.replace(":", "");
+        return isISR ? `(?<${paramName}>[^/]*)` : `([^/]*)`;
+      } else {
+        // Static segment: stays as-is for serverless, becomes named group for ISR
+        return isISR ? `(?<${segment}>${segment})` : segment;
+      }
+    });
+
+    const sourcePattern = `/${regexSegments.join("/")}`;
+
+    // Create main route and content.dat route
+    allRoutes.push(
+      { src: sourcePattern, dest: destination, check: true },
+      {
+        src: isISR
+          ? `${sourcePattern}/(?<content>content.dat)`
+          : `${sourcePattern}/content.dat`,
+        dest: destination,
+        check: true
+      }
+    );
+  }
+
+  return allRoutes;
+}
+
 async function writeConfigJson(routes: RoutePattern[]) {
+  const serverlessRoutes = generateServerlessRoutes(routes);
+
   await writeJson(path.join(VERCEL_OUTPUT_DIR, 'config.json'), {
     version: 3,
-    routes: routes.map((route) => { }),
+    routes: [
+      { handle: "filesystem" },
+      {
+        src: "^/([^/]+(?:/[^/]+)*)/?$",
+        dest: "/$1/index.html"
+      },
+      ...serverlessRoutes
+    ]
   });
 }

@@ -1,20 +1,48 @@
 // @ts-ignore
-import * as render from "render";
+import { render } from "render";
 
-export default function(request, response) {
-  console.debug("query", request.query);
-  console.debug("url", request.url);
-  console.debug("headers", request.headers);
-  console.debug(render);
+export default async function(req, res) {
 
-  const { name = 'friend' } = request.query
+  try {
+    const elmResponse = await render(reqToJson(req));
+    for (const [key, value] of Object.entries(elmResponse.headers)) {
+      res.setHeader(key, value);
+    }
 
-  const body =
-    `Howdy ${name}, from Vercel!\n` +
-    `Node.js: ${process.version}\n` +
-    `Request URL: ${request.url}\n` +
-    `Server time: ${new Date().toISOString()})`
+    if (elmResponse.kind === "bytes") {
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("x-powered-by", "elm-pages");
+      res.status(elmResponse.statusCode).end(Buffer.from(elmResponse.body));
+    } else if (elmResponse.kind === "api-response") {
+      res.status(elmResponse.statusCode).end(elmResponse.body);
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.setHeader("x-powered-by", "elm-pages");
+      res.statusCode = elmResponse.statusCode;
+      res.end(elmResponse.body);
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).setHeader("Content-Type", "text/html").end(`<body><h1>Error</h1><pre>${JSON.stringify(error, null, 2)}</pre></body>`);
+  }
 
-  response.setHeader('Content-Type', 'text/plain')
-  response.end(body)
 }
+
+function reqToJson(req) {
+  console.log(req);
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'localhost:3000';
+  const absoluteUrl = `${protocol}://${host}${req.url}`;
+
+  return {
+    requestTime: Math.round(new Date().getTime()),
+    method: req.method,
+    headers: req.headers,
+    rawUrl: absoluteUrl,
+    body: req.body || null,
+    multiPartFormData: null,
+  };
+}
+
+
+

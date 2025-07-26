@@ -2,3 +2,6 @@ node_modules/
 .devenv
 .direnv
 .direnv/bin
+examples/station/.elm-pages
+examples/station/dist
+examples/station/elm-stuff/elm-pages

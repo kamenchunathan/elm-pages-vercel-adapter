@@ -35,7 +35,7 @@ var __async = (__this, __arguments, generator) => {
 };
 
 // raw-loader:./server.ts?raw
-var server_default = '// @ts-ignore\nimport * as render from "render";\n\nexport default function(request, response) {\n  console.debug("query", request.query);\n  console.debug("url", request.url);\n  console.debug("headers", request.headers);\n  console.debug(render);\n\n  const { name = \'friend\' } = request.query\n\n  const body =\n    `Howdy ${name}, from Vercel!\\n` +\n    `Node.js: ${process.version}\\n` +\n    `Request URL: ${request.url}\\n` +\n    `Server time: ${new Date().toISOString()})`\n\n  response.setHeader(\'Content-Type\', \'text/plain\')\n  response.end(body)\n}\n';
+var server_default = '// @ts-ignore\nimport { render } from "render";\n\nexport default async function(req, res) {\n\n  try {\n    const elmResponse = await render(reqToJson(req));\n    for (const [key, value] of Object.entries(elmResponse.headers)) {\n      res.setHeader(key, value);\n    }\n\n    if (elmResponse.kind === "bytes") {\n      res.setHeader("Content-Type", "application/octet-stream");\n      res.setHeader("x-powered-by", "elm-pages");\n      res.status(elmResponse.statusCode).end(Buffer.from(elmResponse.body));\n    } else if (elmResponse.kind === "api-response") {\n      res.status(elmResponse.statusCode).end(elmResponse.body);\n    } else {\n      res.setHeader("Content-Type", "text/html");\n      res.setHeader("x-powered-by", "elm-pages");\n      res.statusCode = elmResponse.statusCode;\n      res.end(elmResponse.body);\n    }\n  } catch (error) {\n    console.error(error);\n    res.status(500).setHeader("Content-Type", "text/html").end(`<body><h1>Error</h1><pre>${JSON.stringify(error, null, 2)}</pre></body>`);\n  }\n\n}\n\nfunction reqToJson(req) {\n  console.log(req);\n  const protocol = req.headers[\'x-forwarded-proto\'] || req.protocol || \'http\';\n  const host = req.headers[\'x-forwarded-host\'] || req.headers.host || \'localhost:3000\';\n  const absoluteUrl = `${protocol}://${host}${req.url}`;\n\n  return {\n    requestTime: Math.round(new Date().getTime()),\n    method: req.method,\n    headers: req.headers,\n    rawUrl: absoluteUrl,\n    body: req.body || null,\n    multiPartFormData: null,\n  };\n}\n\n\n\n';
 
 // src/index.ts
 var path = __require("path");
@@ -48,10 +48,10 @@ function run(_0) {
     yield fsExtra.emptyDir(VERCEL_OUTPUT_DIR);
     yield promises.mkdir(staticFilesDir);
     yield promises.mkdir(functionsDir);
-    yield writeConfigJson();
-    yield promises.cp(path$1.join(ELM_DIST_DIR, "assets"), path$1.join(staticFilesDir, "assets"), { recursive: true });
+    yield writeConfigJson(routePatterns);
+    yield promises.cp(ELM_DIST_DIR, path$1.join(staticFilesDir), { recursive: true });
     for (const routePattern of routePatterns) {
-      if (routePattern.kind === "static" || routePattern.kind === "prerender") {
+      if (routePattern.kind === "static" || routePattern.kind === "prerender" || routePattern.kind == "prerender-with-fallback") {
         yield handlePrerenderedRoute(routePattern.pathPattern, ELM_DIST_DIR, staticFilesDir);
       }
     }
@@ -62,13 +62,12 @@ function run(_0) {
 function handlePrerenderedRoute(pathPattern, elmDistDir, staticFilesDir) {
   return __async(this, null, function* () {
     console.log("Handle route: " + pathPattern);
-    const prerenderedRoutesGlob = path$1.join(elmDistDir + pathPatternToGlob(pathPattern), "index.html");
+    const prerenderedRoutesGlob = path$1.join(elmDistDir + pathPatternToGlob(pathPattern), "{index.html,content.dat}");
     const htmlFiles = yield glob.glob(prerenderedRoutesGlob, {});
     for (const file of htmlFiles) {
-      const folder = file.substring(elmDistDir.length, file.length - 10);
-      const dstDir = path$1.join(staticFilesDir, folder);
+      const dstDir = path$1.join(staticFilesDir, path.dirname(file).substring(elmDistDir.length));
       yield promises.mkdir(dstDir, { recursive: true });
-      yield promises.copyFile(file, path$1.join(dstDir, "index.html"));
+      yield promises.copyFile(file, path$1.join(dstDir, path.basename(file)));
     }
   });
 }
@@ -91,14 +90,14 @@ function createServerlessFunction(funcName, functionsDir, renderFunctionFilePath
     console.log(funcDir);
     fsExtra.writeJson(path.join(funcDir, ".vc-config.json"), {
       runtime: "nodejs20.x",
-      handler: "index.mjs"
+      handler: "index.js"
     });
     try {
       let buildResult = yield esbuild.build(
         {
           platform: "node",
-          target: "node16",
-          format: "esm",
+          target: "node20",
+          format: "cjs",
           stdin: {
             contents: server_default,
             resolveDir: process.cwd(),
@@ -107,7 +106,8 @@ function createServerlessFunction(funcName, functionsDir, renderFunctionFilePath
           legalComments: "none",
           bundle: true,
           treeShaking: true,
-          outfile: path$1.join(funcDir, "index.mjs"),
+          outfile: path$1.join(funcDir, "index.js"),
+          external: [...__require("module").builtinModules],
           alias: {
             "render": renderFunctionFilePath
           }
@@ -120,11 +120,49 @@ function createServerlessFunction(funcName, functionsDir, renderFunctionFilePath
     }
   });
 }
-function writeConfigJson(_routes) {
+function generateServerlessRoutes(routePatterns) {
+  const serverRoutes = routePatterns.filter(
+    (route) => route.kind === "prerender-with-fallback" || route.kind === "serverless"
+  );
+  const allRoutes = [];
+  for (const route of serverRoutes) {
+    const isISR = route.kind === "prerender-with-fallback";
+    const destination = isISR ? "/isr_" : "/ssr_";
+    const segments = route.pathPattern.substring(1).split("/");
+    const regexSegments = segments.map((segment) => {
+      if (segment.includes(":")) {
+        const paramName = segment.replace(":", "");
+        return isISR ? `(?<${paramName}>[^/]*)` : `([^/]*)`;
+      } else {
+        return isISR ? `(?<${segment}>${segment})` : segment;
+      }
+    });
+    const sourcePattern = `/${regexSegments.join("/")}`;
+    allRoutes.push(
+      { src: sourcePattern, dest: destination, check: true },
+      {
+        src: isISR ? `${sourcePattern}/(?<content>content.dat)` : `${sourcePattern}/content.dat`,
+        dest: destination,
+        check: true
+      }
+    );
+  }
+  return allRoutes;
+}
+function writeConfigJson(routes) {
   return __async(this, null, function* () {
-    yield promises.writeFile(path.join(VERCEL_OUTPUT_DIR, "config.json"), JSON.stringify({
-      version: 3
-    }));
+    const serverlessRoutes = generateServerlessRoutes(routes);
+    yield fsExtra.writeJson(path.join(VERCEL_OUTPUT_DIR, "config.json"), {
+      version: 3,
+      routes: [
+        { handle: "filesystem" },
+        {
+          src: "^/([^/]+(?:/[^/]+)*)/?$",
+          dest: "/$1/index.html"
+        },
+        ...serverlessRoutes
+      ]
+    });
   });
 }
 
