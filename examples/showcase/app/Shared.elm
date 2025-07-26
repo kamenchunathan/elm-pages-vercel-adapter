@@ -3,13 +3,16 @@ module Shared exposing (Data, Model, Msg(..), SharedMsg(..), template)
 import BackendTask exposing (BackendTask)
 import Effect exposing (Effect)
 import FatalError exposing (FatalError)
-import Html exposing (Html)
+import Html exposing (..)
+import Html.Attributes as HA exposing (..)
 import Html.Events
 import Pages.Flags
 import Pages.PageUrl exposing (PageUrl)
-import UrlPath exposing (UrlPath)
 import Route exposing (Route)
 import SharedTemplate exposing (SharedTemplate)
+import Svg
+import Svg.Attributes as SvgAttr
+import UrlPath exposing (UrlPath)
 import View exposing (View)
 
 
@@ -93,28 +96,43 @@ view :
     -> { body : List (Html msg), title : String }
 view sharedData page model toMsg pageView =
     { body =
-        [ Html.nav []
-            [ Html.button
-                [ Html.Events.onClick MenuClicked ]
-                [ Html.text
-                    (if model.showMenu then
-                        "Close Menu"
-
-                     else
-                        "Open Menu"
-                    )
-                ]
-            , if model.showMenu then
-                Html.ul []
-                    [ Html.li [] [ Html.text "Menu item 1" ]
-                    , Html.li [] [ Html.text "Menu item 2" ]
+        [ header [ class "flex items-center justify-between flex-wrap bg-gray-800 p-6" ]
+            [ Route.link [ class "flex items-center flex-shrink-0 text-white mr-6" ]
+                [ h1 [ class "font-semibold text-xl tracking-tight" ] [ text "My Site" ] ]
+                Route.Index
+            , div [ class "block lg:hidden" ]
+                [ button
+                    [ class "flex items-center px-3 py-2 border rounded text-teal-200 border-teal-400 hover:text-white hover:border-white"
+                    , Html.Events.onClick (toMsg MenuClicked)
                     ]
-
-              else
-                Html.text ""
+                    [ Svg.svg [ SvgAttr.class "fill-current h-3 w-3", SvgAttr.viewBox "0 0 20 20", SvgAttr.name "http://www.w3.org/2000/svg" ]
+                        [ Svg.title [] [ text "Menu" ]
+                        , Svg.path [ SvgAttr.d "M0 3h20v2H0V3zm0 6h20v2H0V9zm0 6h20v2H0v-2z" ] []
+                        ]
+                    ]
+                ]
+            , div
+                [ classList [ ( "w-full flex-grow lg:flex lg:items-center lg:w-auto justify-end", True ), ( "hidden", not model.showMenu ) ]
+                , class "lg:!flex"
+                ]
+                [ Route.link [ HA.class "block mt-4 lg:hidden text-teal-200 hover:text-white mr-4" ] [ text "Home" ] Route.Index
+                , Route.link [ class "block mt-4 lg:inline-block lg:mt-0 text-teal-200 hover:text-white mr-4" ] [ text "About" ] Route.About
+                , Route.link [ class "block mt-4 lg:inline-block lg:mt-0 text-teal-200 hover:text-white" ] [ text "Archive" ] Route.Archive
+                ]
             ]
-            |> Html.map toMsg
-        , Html.main_ [] pageView.body
+        , main_
+            [ class "container mx-auto px-4 flex-grow" ]
+            pageView.body
+        , footer [ class "bg-gray-800 text-white p-4 mt-8" ]
+            [ div [ class "container mx-auto text-center" ]
+                [ p [] [ text "© 2025 My Site. All rights reserved." ]
+                , div [ class "flex justify-center space-x-4 mt-2" ]
+                    [ a [ href "#", class "hover:text-teal-200" ] [ text "Legal" ]
+                    , a [ href "#", class "hover:text-teal-200" ] [ text "Socials" ]
+                    ]
+                ]
+            ]
         ]
     , title = pageView.title
     }
+

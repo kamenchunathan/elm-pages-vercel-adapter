@@ -12,6 +12,7 @@ import ErrorPage
 import FatalError
 import Head
 import Html
+import Html.Attributes exposing (class)
 import PagesMsg
 import RouteBuilder
 import Server.Request
@@ -86,7 +87,7 @@ data :
     -> Server.Request.Request
     -> BackendTask.BackendTask FatalError.FatalError (Server.Response.Response Data ErrorPage.ErrorPage)
 data routeParams request =
-    Server.Response.render { message = "Hello World manigga" } |> BackendTask.succeed
+    Server.Response.render { message = "This is the about page." } |> BackendTask.succeed
 
 
 head : RouteBuilder.App Data ActionData RouteParams -> List Head.Tag
@@ -100,7 +101,12 @@ view :
     -> Model
     -> View.View (PagesMsg.PagesMsg Msg)
 view app shared model =
-    { title = "About", body = [ Html.h2 [] [ Html.text "New Page" ] ] }
+    { title = "About"
+    , body =
+        [ Html.h1 [ class "text-3xl font-bold mb-4" ] [ Html.text "About Us" ]
+        , Html.p [ class "text-lg" ] [ Html.text app.data.message ]
+        ]
+    }
 
 
 action :

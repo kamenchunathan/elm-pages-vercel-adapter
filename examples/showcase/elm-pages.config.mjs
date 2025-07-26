@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 import adapter from "vercel-adapter";
+import tailwindcss from "@tailwindcss/vite"
 
 export default {
-  vite: defineConfig({}),
+  vite: defineConfig({ plugins: [tailwindcss()] }),
   adapter,
   headTagsTemplate(context) {
     return `

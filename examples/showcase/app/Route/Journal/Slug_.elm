@@ -1,53 +1,74 @@
-module Route.Blog.Slug_ exposing (ActionData, Data, Model, Msg, route)
+module Route.Journal.Slug_ exposing (ActionData, Data, Model, Msg, RouteParams, route)
 
 import BackendTask exposing (BackendTask)
 import BackendTask.File
 import BackendTask.Glob as Glob
 import GlobPatterns
+import Effect
 import FatalError exposing (FatalError)
 import Head
-import Head.Seo as Seo
 import Html as H
 import Html.Attributes as Attr
 import Json.Decode as Decode
 import Markdown.Parser
 import Markdown.Renderer
-import Pages.Url
 import PagesMsg exposing (PagesMsg)
-import RouteBuilder exposing (App, StatelessRoute)
+import RouteBuilder
 import Shared
-import View exposing (View)
+import UrlPath
+import View
 
 
 type alias Model =
     {}
 
 
-type alias Msg =
-    ()
+type Msg
+    = NoOp
 
 
 type alias RouteParams =
     { slug : String }
 
 
-route : StatelessRoute RouteParams Data ActionData
+route : RouteBuilder.StatefulRoute RouteParams Data ActionData Model Msg
 route =
     RouteBuilder.preRender
-        { head = head
+        { data = data
         , pages = pages
-        , data = data
+        , head = head
         }
-        |> RouteBuilder.buildNoState { view = view }
+        |> RouteBuilder.buildWithLocalState
+            { view = view
+            , init = init
+            , update = update
+            , subscriptions = subscriptions
+            }
 
 
+init :
+    RouteBuilder.App Data ActionData RouteParams
+    -> Shared.Model
+    -> ( Model, Effect.Effect Msg )
+init app shared =
+    ( {}, Effect.none )
 
 
+update :
+    RouteBuilder.App Data ActionData RouteParams
+    -> Shared.Model
+    -> Msg
+    -> Model
+    -> ( Model, Effect.Effect Msg )
+update app shared msg model =
+    case msg of
+        NoOp ->
+            ( model, Effect.none )
 
-pages : BackendTask FatalError (List RouteParams)
-pages =
-    GlobPatterns.blogPostsGlob
-        |> BackendTask.map (List.map (\post -> { slug = post.slug }))
+
+subscriptions : RouteParams -> UrlPath.UrlPath -> Shared.Model -> Model -> Sub Msg
+subscriptions routeParams path shared model =
+    Sub.none
 
 
 type alias Data =
@@ -56,6 +77,15 @@ type alias Data =
 
 type alias ActionData =
     {}
+
+
+
+
+
+pages : BackendTask.BackendTask FatalError.FatalError (List RouteParams)
+pages =
+    GlobPatterns.journalPostsGlob
+        |> BackendTask.map (List.map (\journal -> { slug = journal.slug }))
 
 
 fatalErrorFromFileError : String -> { fatal : FatalError, recoverable : BackendTask.File.FileReadError Decode.Error } -> FatalError
@@ -71,42 +101,29 @@ fatalErrorFromFileError filePath error =
             FatalError.fromString ("Error decoding frontmatter in " ++ filePath ++ ": " ++ Decode.errorToString decodeError)
 
 
-postDetailsDecoder : String -> Decode.Decoder Data
-postDetailsDecoder body =
+journalDetailsDecoder : String -> Decode.Decoder Data
+journalDetailsDecoder body =
     Decode.map
         (\title -> { title = title, body = body })
         (Decode.field "title" Decode.string)
 
 
-data : RouteParams -> BackendTask FatalError Data
+data : RouteParams -> BackendTask.BackendTask FatalError.FatalError Data
 data routeParams =
     let
         filePath : String
         filePath =
-            "content/blog/" ++ routeParams.slug ++ ".md"
+            "content/journal/" ++ routeParams.slug ++ ".md"
     in
     BackendTask.File.bodyWithFrontmatter
-        postDetailsDecoder
+        journalDetailsDecoder
         filePath
         |> BackendTask.mapError (fatalErrorFromFileError filePath)
 
 
-head : App Data ActionData RouteParams -> List Head.Tag
+head : RouteBuilder.App Data ActionData RouteParams -> List Head.Tag
 head app =
-    Seo.summary
-        { canonicalUrlOverride = Nothing
-        , siteName = "My Blog"
-        , image =
-            { url = Pages.Url.external ""
-            , alt = "logo"
-            , dimensions = Nothing
-            , mimeType = Nothing
-            }
-        , description = ""
-        , locale = Nothing
-        , title = app.data.title
-        }
-        |> Seo.website
+    []
 
 
 markdownToHtml : String -> List (H.Html msg)
@@ -114,7 +131,7 @@ markdownToHtml markdownString =
     case
         markdownString
             |> Markdown.Parser.parse
-            |> Result.mapError (always "Markdown error.")
+            |> Result.mapError (\_ -> "Markdown error.")
             |> Result.andThen
                 (\blocks ->
                     Markdown.Renderer.render
@@ -125,16 +142,19 @@ markdownToHtml markdownString =
         Ok html ->
             html
 
-        Err e ->
-            [ H.text e ]
+        Err _ ->
+            []
 
 
-view : App Data ActionData RouteParams -> Shared.Model -> View (PagesMsg Msg)
-view app sharedModel =
+view :
+    RouteBuilder.App Data ActionData RouteParams
+    -> Shared.Model
+    -> Model
+    -> View.View (PagesMsg Msg)
+view app shared model =
     { title = app.data.title
     , body =
-        [ H.main_ [ Attr.id "markdown-content", Attr.class "prose lg:prose-xl mx-auto py-8" ]
+        [ H.main_ [ Attr.id "markdown-content", Attr.class "prose lg:prose-xl mx-auto py-8 journal-content" ]
             (markdownToHtml app.data.body)
         ]
     }
-
